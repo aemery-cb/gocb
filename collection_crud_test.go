@@ -1947,12 +1947,15 @@ func (suite *IntegrationTestSuite) TestInsertReplicateToGetAllReplicas() {
 		suite.T().Fatalf("Could not read test dataset: %v", err)
 	}
 
-	agent, err := globalCollection.getKvProvider()
+	prov, err := globalCollection.getKvProvider()
 	if err != nil {
 		suite.T().Fatalf("Failed to get kv provider, was %v", err)
 	}
 
-	snapshot, err := globalCollection.waitForConfigSnapshot(context.Background(), time.Now().Add(5*time.Second), agent)
+	agent, ok := prov.(*kvProviderCore)
+	suite.Require().True(ok)
+
+	snapshot, err := agent.waitForConfigSnapshot(context.Background(), time.Now().Add(5*time.Second))
 	if err != nil {
 		suite.T().Fatalf("Failed to get config snapshot, was %v", err)
 	}
@@ -2198,7 +2201,7 @@ func (suite *UnitTestSuite) TestGetErrorCollectionUnknown() {
 	pendingOp := new(mockPendingOp)
 	pendingOp.AssertNotCalled(suite.T(), "Cancel", mock.AnythingOfType("error"))
 
-	provider := new(mockKvProvider)
+	provider := new(mockKvProviderCoreProvider)
 	provider.
 		On("Get", mock.AnythingOfType("gocbcore.GetOptions"), mock.AnythingOfType("gocbcore.GetCallback")).
 		Run(func(args mock.Arguments) {
@@ -2207,7 +2210,9 @@ func (suite *UnitTestSuite) TestGetErrorCollectionUnknown() {
 		}).
 		Return(pendingOp, nil)
 
-	col := suite.collection("mock", "", "", provider)
+	agent := &kvProviderCore{agent: provider}
+
+	col := suite.collection("mock", "", "", agent)
 
 	res, err := col.Get("getDocErrCollectionUnknown", nil)
 	if err == nil {
@@ -2301,7 +2306,7 @@ func (suite *UnitTestSuite) TestGetErrorProperties() {
 		LastConnectionID:   "d80aa17aa2577d3d/87aa643382554811",
 	}
 
-	provider := new(mockKvProvider)
+	provider := new(mockKvProviderCoreProvider)
 	provider.
 		On("Get", mock.AnythingOfType("gocbcore.GetOptions"), mock.AnythingOfType("gocbcore.GetCallback")).
 		Run(func(args mock.Arguments) {
@@ -2310,7 +2315,9 @@ func (suite *UnitTestSuite) TestGetErrorProperties() {
 		}).
 		Return(pendingOp, nil)
 
-	col := suite.collection("mock", "", "", provider)
+	agent := &kvProviderCore{agent: provider}
+
+	col := suite.collection("mock", "", "", agent)
 
 	res, err := col.Get("someid", nil)
 	if !errors.Is(err, ErrDocumentNotFound) {
@@ -2345,7 +2352,7 @@ func (suite *UnitTestSuite) TestExpiryConversion5Seconds() {
 	pendingOp := new(mockPendingOp)
 	pendingOp.AssertNotCalled(suite.T(), "Cancel", mock.AnythingOfType("error"))
 
-	provider := new(mockKvProvider)
+	provider := new(mockKvProviderCoreProvider)
 	provider.
 		On("Set", mock.AnythingOfType("gocbcore.SetOptions"), mock.AnythingOfType("gocbcore.StoreCallback")).
 		Run(func(args mock.Arguments) {
@@ -2359,7 +2366,9 @@ func (suite *UnitTestSuite) TestExpiryConversion5Seconds() {
 		}).
 		Return(pendingOp, nil)
 
-	col := suite.collection("mock", "", "", provider)
+	agent := &kvProviderCore{agent: provider}
+
+	col := suite.collection("mock", "", "", agent)
 
 	res, err := col.Upsert("someid", "someval", &UpsertOptions{
 		Expiry: 5 * time.Second,
@@ -2373,7 +2382,7 @@ func (suite *UnitTestSuite) TestExpiryConversion500Milliseconds() {
 	pendingOp := new(mockPendingOp)
 	pendingOp.AssertNotCalled(suite.T(), "Cancel", mock.AnythingOfType("error"))
 
-	provider := new(mockKvProvider)
+	provider := new(mockKvProviderCoreProvider)
 	provider.
 		On("Set", mock.AnythingOfType("gocbcore.SetOptions"), mock.AnythingOfType("gocbcore.StoreCallback")).
 		Run(func(args mock.Arguments) {
@@ -2387,7 +2396,9 @@ func (suite *UnitTestSuite) TestExpiryConversion500Milliseconds() {
 		}).
 		Return(pendingOp, nil)
 
-	col := suite.collection("mock", "", "", provider)
+	agent := &kvProviderCore{agent: provider}
+
+	col := suite.collection("mock", "", "", agent)
 
 	res, err := col.Upsert("someid", "someval", &UpsertOptions{
 		Expiry: 500 * time.Millisecond,
@@ -2402,7 +2413,7 @@ func (suite *UnitTestSuite) TestExpiryConversion30Days() {
 	pendingOp.AssertNotCalled(suite.T(), "Cancel", mock.AnythingOfType("error"))
 
 	expectedTime := time.Now().Add(30 * 24 * time.Hour)
-	provider := new(mockKvProvider)
+	provider := new(mockKvProviderCoreProvider)
 	provider.
 		On("Set", mock.AnythingOfType("gocbcore.SetOptions"), mock.AnythingOfType("gocbcore.StoreCallback")).
 		Run(func(args mock.Arguments) {
@@ -2423,7 +2434,9 @@ func (suite *UnitTestSuite) TestExpiryConversion30Days() {
 		}).
 		Return(pendingOp, nil)
 
-	col := suite.collection("mock", "", "", provider)
+	agent := &kvProviderCore{agent: provider}
+
+	col := suite.collection("mock", "", "", agent)
 
 	res, err := col.Upsert("someid", "someval", &UpsertOptions{
 		Expiry: 30 * 24 * time.Hour,
@@ -2438,7 +2451,7 @@ func (suite *UnitTestSuite) TestExpiryConversion31Days() {
 	pendingOp.AssertNotCalled(suite.T(), "Cancel", mock.AnythingOfType("error"))
 
 	expectedTime := time.Now().Add(31 * 24 * time.Hour)
-	provider := new(mockKvProvider)
+	provider := new(mockKvProviderCoreProvider)
 	provider.
 		On("Set", mock.AnythingOfType("gocbcore.SetOptions"), mock.AnythingOfType("gocbcore.StoreCallback")).
 		Run(func(args mock.Arguments) {
@@ -2459,7 +2472,9 @@ func (suite *UnitTestSuite) TestExpiryConversion31Days() {
 		}).
 		Return(pendingOp, nil)
 
-	col := suite.collection("mock", "", "", provider)
+	agent := &kvProviderCore{agent: provider}
+
+	col := suite.collection("mock", "", "", agent)
 
 	res, err := col.Upsert("someid", "someval", &UpsertOptions{
 		Expiry: 31 * 24 * time.Hour,

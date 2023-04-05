@@ -144,6 +144,7 @@ func (suite *IntegrationTestSuite) ensureReplicasUpEnhDura() {
 
 		_, err = globalCollection.GetAnyReplica("ensurereplicasup", &GetAnyReplicaOptions{})
 		if err != nil {
+			suite.T().Logf("Failed to get any replica: %s", err)
 			time.Sleep(50 * time.Millisecond)
 			return false
 		}

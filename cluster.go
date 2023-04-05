@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	gocbcore "github.com/couchbase/gocbcore/v10"
@@ -263,13 +264,23 @@ func clusterFromOptions(opts ClusterOptions) *Cluster {
 // Connect creates and returns a Cluster instance created using the
 // provided options and a connection string.
 func Connect(connStr string, opts ClusterOptions) (*Cluster, error) {
-	connSpec, err := gocbconnstr.Parse(connStr)
-	if err != nil {
-		return nil, err
-	}
+	// temporary hack for PS support.
+	connSpec := gocbconnstr.ConnSpec{}
+	var err error
+	if strings.HasPrefix(connStr, "protostellar") {
+		//
+		connSpec.Addresses = []gocbconnstr.Address{{Host: "localhost", Port: 18098}}
+		connSpec.Scheme = "protostellar"
+	} else {
+		connSpec, err = gocbconnstr.Parse(connStr)
+		if err != nil {
+			return nil, err
+		}
 
-	if connSpec.Scheme == "http" {
-		return nil, errors.New("http scheme is not supported, use couchbase or couchbases instead")
+		if connSpec.Scheme == "http" {
+			return nil, errors.New("http scheme is not supported, use couchbase or couchbases instead")
+		}
+
 	}
 
 	cluster := clusterFromOptions(opts)
@@ -280,7 +291,7 @@ func Connect(connStr string, opts ClusterOptions) (*Cluster, error) {
 		return nil, err
 	}
 
-	cli := newConnectionMgr()
+	cli := newConnectionMgr(connSpec.Scheme)
 	err = cli.buildConfig(cluster)
 	if err != nil {
 		return nil, err
