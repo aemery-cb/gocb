@@ -553,6 +553,9 @@ github.com/cncf/xds/go v0.0.0-20220314180256-7f1daf1720fc/go.mod h1:eXthEFrGJvWH
 github.com/cncf/xds/go v0.0.0-20230105202645-06c439db220b/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/couchbase/gocbcore/v10 v10.2.3 h1:PEkRSNSkKjUBXx82Ucr094+anoiCG5GleOOQZOHo6D4=
 github.com/couchbase/gocbcore/v10 v10.2.3/go.mod h1:lYQIIk+tzoMcwtwU5GzPbDdqEkwkH3isI2rkSpfL0oM=
+github.com/couchbase/gocbcoreps v0.0.1 h1:YUc53M2lajjp/vYzSiSTp5uiYPEVZmB5J38Jj6kzcfU=
+github.com/couchbase/gocbcoreps v0.0.1/go.mod h1:afd8dlqM6a0ZI2R/MqzIfteVIPwvM7zuWW2HCvkfYTM=
+github.com/couchbase/goprotostellar v0.0.0-20230321094315-7a54be56b9c9/go.mod h1:gs1eioLVOHETTFWxDY4v7Q/kRPMgqmX6t/TPcI429ls=
 github.com/couchbase/goprotostellar v0.0.1-3 h1:2jnuY+TIoTaNYIghOuZ1FtuLSsJv7xi7PK1ZbY/h27M=
 github.com/couchbase/goprotostellar v0.0.1-3/go.mod h1:gs1eioLVOHETTFWxDY4v7Q/kRPMgqmX6t/TPcI429ls=
 github.com/couchbaselabs/gocaves/client v0.0.0-20230307083111-cc3960c624b1/go.mod h1:AVekAZwIY2stsJOMWLAS/0uA/+qdp7pjO8EHnl61QkY=

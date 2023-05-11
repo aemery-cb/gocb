@@ -12,6 +12,12 @@ type stdConnectionMgr struct {
 	lock       sync.Mutex
 	agentgroup *gocbcore.AgentGroup
 	config     *gocbcore.AgentGroupConfig
+
+	retryStrategyWrapper *retryStrategyWrapper
+	transcoder           Transcoder
+	timeouts             TimeoutsConfig
+	tracer               RequestTracer
+	meter                *meterWrapper
 }
 
 func (c *stdConnectionMgr) buildConfig(cluster *Cluster) error {
@@ -167,7 +173,15 @@ func (c *stdConnectionMgr) getQueryProvider() (queryProvider, error) {
 		return nil, errors.New("cluster not yet connected")
 	}
 
-	return &queryProviderWrapper{provider: c.agentgroup}, nil
+	return &queryProviderCore{
+		provider: &queryProviderWrapper{provider: c.agentgroup},
+
+		retryStrategyWrapper: c.retryStrategyWrapper,
+		transcoder:           c.transcoder,
+		timeouts:             c.timeouts,
+		tracer:               c.tracer,
+		meter:                c.meter,
+	}, nil
 }
 
 func (c *stdConnectionMgr) getAnalyticsProvider() (analyticsProvider, error) {

@@ -1,8 +1,6 @@
 package gocb
 
-import (
-	"github.com/couchbase/gocbcore/v10"
-)
+import gocbcore "github.com/couchbase/gocbcore/v10"
 
 type connectionManager interface {
 	connect() error
@@ -22,12 +20,22 @@ type connectionManager interface {
 }
 
 // TODO: change how managers are selected.
-func newConnectionMgr(protocol string) connectionManager {
+func (c *Cluster) newConnectionMgr(protocol string) connectionManager {
 	switch protocol {
 	case "protostellar":
-		return &psConnectionMgr{}
+		return &psConnectionMgr{
+			timeouts: c.timeoutsConfig,
+			tracer:   c.tracer,
+			meter:    c.meter,
+		}
 	default:
-		client := &stdConnectionMgr{}
+		client := &stdConnectionMgr{
+			retryStrategyWrapper: c.retryStrategyWrapper,
+			transcoder:           c.transcoder,
+			timeouts:             c.timeoutsConfig,
+			tracer:               c.tracer,
+			meter:                c.meter,
+		}
 		return client
 	}
 }

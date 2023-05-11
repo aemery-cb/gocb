@@ -3,9 +3,10 @@ package gocb
 import (
 	"errors"
 	"fmt"
-	"github.com/couchbase/gocbcore/v10"
-	"github.com/couchbase/gocbcoreps"
 	"sync"
+
+	"github.com/couchbase/gocbcore/v10"
+	gocbcoreps "github.com/couchbase/gocbcoreps"
 )
 
 var ErrNotImplemented = errors.New("not implemented")
@@ -15,6 +16,10 @@ type psConnectionMgr struct {
 	lock   sync.Mutex
 	config *gocbcoreps.DialOptions
 	agent  *gocbcoreps.RoutingClient
+
+	timeouts TimeoutsConfig
+	tracer   RequestTracer
+	meter    *meterWrapper
 }
 
 func (c *psConnectionMgr) connect() error {
@@ -62,7 +67,13 @@ func (c *psConnectionMgr) getViewProvider(bucketName string) (viewProvider, erro
 	return &viewProviderWrapper{}, ErrNotImplemented
 }
 func (c *psConnectionMgr) getQueryProvider() (queryProvider, error) {
-	return &queryProviderWrapper{}, ErrNotImplemented
+	provider := c.agent.QueryV1()
+	return &queryProviderPs{
+		provider: provider,
+		timeouts: c.timeouts,
+		tracer:   c.tracer,
+		meter:    c.meter,
+	}, nil
 }
 func (c *psConnectionMgr) getAnalyticsProvider() (analyticsProvider, error) {
 	return &analyticsProviderWrapper{}, ErrNotImplemented
