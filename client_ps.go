@@ -79,7 +79,7 @@ func (c *psConnectionMgr) getAnalyticsProvider() (analyticsProvider, error) {
 	return &analyticsProviderWrapper{}, ErrNotImplemented
 }
 func (c *psConnectionMgr) getSearchProvider() (searchProvider, error) {
-	return &searchProviderWrapper{}, ErrNotImplemented
+	return &searchProviderPs{agent: c.agent.SearchV1()}, ErrNotImplemented
 }
 func (c *psConnectionMgr) getHTTPProvider(bucketName string) (httpProvider, error) {
 	return &httpProviderWrapper{}, ErrNotImplemented

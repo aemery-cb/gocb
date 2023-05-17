@@ -22,10 +22,6 @@ type analyticsProvider interface {
 	AnalyticsQuery(ctx context.Context, opts gocbcore.AnalyticsQueryOptions) (analyticsRowReader, error)
 }
 
-type searchProvider interface {
-	SearchQuery(ctx context.Context, opts gocbcore.SearchQueryOptions) (searchRowReader, error)
-}
-
 type waitUntilReadyProvider interface {
 	WaitUntilReady(ctx context.Context, deadline time.Time, opts gocbcore.WaitUntilReadyOptions) error
 }
@@ -179,29 +175,6 @@ func (apw *queryProviderWrapper) PreparedN1QLQuery(ctx context.Context, opts goc
 		}
 
 		qOut = reader
-		opm.Resolve()
-	}))
-	if err != nil {
-		errOut = err
-	}
-
-	return
-}
-
-type searchProviderWrapper struct {
-	provider *gocbcore.AgentGroup
-}
-
-func (apw *searchProviderWrapper) SearchQuery(ctx context.Context, opts gocbcore.SearchQueryOptions) (sOut searchRowReader, errOut error) {
-	opm := newAsyncOpManager(ctx)
-	err := opm.Wait(apw.provider.SearchQuery(opts, func(reader *gocbcore.SearchRowReader, err error) {
-		if err != nil {
-			errOut = err
-			opm.Reject()
-			return
-		}
-
-		sOut = reader
 		opm.Resolve()
 	}))
 	if err != nil {

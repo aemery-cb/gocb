@@ -108,3 +108,5 @@ func NewDateFacet(field string, size uint64) *DateFacet {
 	mq.data.Size = size
 	return mq
 }
+
+// for internal use only
