@@ -3,8 +3,6 @@ package gocb
 import (
 	"context"
 	"time"
-
-	gocbcore "github.com/couchbase/gocbcore/v10"
 )
 
 // BinaryCollection is a set of binary operations.
@@ -38,7 +36,7 @@ func (c *Collection) binaryAppend(id string, val []byte, opts *AppendOptions) (m
 		opts = &AppendOptions{}
 	}
 
-	opm := c.newKvOpManager("append", opts.ParentSpan)
+	opm := newKvOpManager(c, "append", opts.ParentSpan)
 	defer opm.Finish(false)
 
 	opm.SetDocumentID(id)
@@ -47,7 +45,7 @@ func (c *Collection) binaryAppend(id string, val []byte, opts *AppendOptions) (m
 	opm.SetTimeout(opts.Timeout)
 	opm.SetImpersonate(opts.Internal.User)
 	opm.SetContext(opts.Context)
-
+	opm.SetAdjoinBytes(val)
 	if err := opm.CheckReadyForOp(); err != nil {
 		return nil, err
 	}
@@ -56,35 +54,8 @@ func (c *Collection) binaryAppend(id string, val []byte, opts *AppendOptions) (m
 	if err != nil {
 		return nil, err
 	}
-	err = opm.Wait(agent.Append(gocbcore.AdjoinOptions{
-		Key:                    opm.DocumentID(),
-		Value:                  val,
-		CollectionName:         opm.CollectionName(),
-		ScopeName:              opm.ScopeName(),
-		DurabilityLevel:        opm.DurabilityLevel(),
-		DurabilityLevelTimeout: opm.DurabilityTimeout(),
-		Cas:                    gocbcore.Cas(opts.Cas),
-		RetryStrategy:          opm.RetryStrategy(),
-		TraceContext:           opm.TraceSpanContext(),
-		Deadline:               opm.Deadline(),
-		User:                   opm.Impersonate(),
-	}, func(res *gocbcore.AdjoinResult, err error) {
-		if err != nil {
-			errOut = opm.EnhanceErr(err)
-			opm.Reject()
-			return
-		}
 
-		mutOut = &MutationResult{}
-		mutOut.cas = Cas(res.Cas)
-		mutOut.mt = opm.EnhanceMt(res.MutationToken)
-
-		opm.Resolve(mutOut.mt)
-	}))
-	if err != nil {
-		errOut = err
-	}
-	return
+	return agent.Append(opm)
 }
 
 // Append appends a byte value to a document.
@@ -118,7 +89,7 @@ func (c *Collection) binaryPrepend(id string, val []byte, opts *PrependOptions) 
 		opts = &PrependOptions{}
 	}
 
-	opm := c.newKvOpManager("prepend", opts.ParentSpan)
+	opm := newKvOpManager(c, "prepend", opts.ParentSpan)
 	defer opm.Finish(false)
 
 	opm.SetDocumentID(id)
@@ -127,6 +98,7 @@ func (c *Collection) binaryPrepend(id string, val []byte, opts *PrependOptions) 
 	opm.SetTimeout(opts.Timeout)
 	opm.SetImpersonate(opts.Internal.User)
 	opm.SetContext(opts.Context)
+	opm.SetAdjoinBytes(val)
 
 	if err := opm.CheckReadyForOp(); err != nil {
 		return nil, err
@@ -136,35 +108,7 @@ func (c *Collection) binaryPrepend(id string, val []byte, opts *PrependOptions) 
 	if err != nil {
 		return nil, err
 	}
-	err = opm.Wait(agent.Prepend(gocbcore.AdjoinOptions{
-		Key:                    opm.DocumentID(),
-		Value:                  val,
-		CollectionName:         opm.CollectionName(),
-		ScopeName:              opm.ScopeName(),
-		DurabilityLevel:        opm.DurabilityLevel(),
-		DurabilityLevelTimeout: opm.DurabilityTimeout(),
-		Cas:                    gocbcore.Cas(opts.Cas),
-		RetryStrategy:          opm.RetryStrategy(),
-		TraceContext:           opm.TraceSpanContext(),
-		Deadline:               opm.Deadline(),
-		User:                   opm.Impersonate(),
-	}, func(res *gocbcore.AdjoinResult, err error) {
-		if err != nil {
-			errOut = opm.EnhanceErr(err)
-			opm.Reject()
-			return
-		}
-
-		mutOut = &MutationResult{}
-		mutOut.cas = Cas(res.Cas)
-		mutOut.mt = opm.EnhanceMt(res.MutationToken)
-
-		opm.Resolve(mutOut.mt)
-	}))
-	if err != nil {
-		errOut = err
-	}
-	return
+	return agent.Prepend(opm)
 }
 
 // Prepend prepends a byte value to a document.
@@ -211,8 +155,7 @@ func (c *Collection) binaryIncrement(id string, opts *IncrementOptions) (countOu
 		return nil, makeInvalidArgumentsError("cas is not supported by the server for the Increment operation")
 	}
 
-	opm := c.newKvOpManager("increment", opts.ParentSpan)
-	defer opm.Finish(false)
+	opm := newKvOpManager(c, "increment", opts.ParentSpan)
 
 	opm.SetDocumentID(id)
 	opm.SetDuraOptions(opts.PersistTo, opts.ReplicateTo, opts.DurabilityLevel)
@@ -220,11 +163,15 @@ func (c *Collection) binaryIncrement(id string, opts *IncrementOptions) (countOu
 	opm.SetTimeout(opts.Timeout)
 	opm.SetImpersonate(opts.Internal.User)
 	opm.SetContext(opts.Context)
+	opm.SetDelta(opts.Delta)
+	opm.SetExpiry(opts.Expiry)
 
 	realInitial := uint64(0xFFFFFFFFFFFFFFFF)
 	if opts.Initial >= 0 {
 		realInitial = uint64(opts.Initial)
 	}
+
+	opm.SetInitial(realInitial)
 
 	if err := opm.CheckReadyForOp(); err != nil {
 		return nil, err
@@ -234,37 +181,8 @@ func (c *Collection) binaryIncrement(id string, opts *IncrementOptions) (countOu
 	if err != nil {
 		return nil, err
 	}
-	err = opm.Wait(agent.Increment(gocbcore.CounterOptions{
-		Key:                    opm.DocumentID(),
-		Delta:                  opts.Delta,
-		Initial:                realInitial,
-		Expiry:                 durationToExpiry(opts.Expiry),
-		CollectionName:         opm.CollectionName(),
-		ScopeName:              opm.ScopeName(),
-		DurabilityLevel:        opm.DurabilityLevel(),
-		DurabilityLevelTimeout: opm.DurabilityTimeout(),
-		RetryStrategy:          opm.RetryStrategy(),
-		TraceContext:           opm.TraceSpanContext(),
-		Deadline:               opm.Deadline(),
-		User:                   opm.Impersonate(),
-	}, func(res *gocbcore.CounterResult, err error) {
-		if err != nil {
-			errOut = opm.EnhanceErr(err)
-			opm.Reject()
-			return
-		}
 
-		countOut = &CounterResult{}
-		countOut.cas = Cas(res.Cas)
-		countOut.mt = opm.EnhanceMt(res.MutationToken)
-		countOut.content = res.Value
-
-		opm.Resolve(countOut.mt)
-	}))
-	if err != nil {
-		errOut = err
-	}
-	return
+	return agent.Increment(opm)
 }
 
 // Increment performs an atomic addition for an integer document. Passing a
@@ -313,7 +231,7 @@ func (c *Collection) binaryDecrement(id string, opts *DecrementOptions) (countOu
 		return nil, makeInvalidArgumentsError("cas is not supported by the server for the Decrement operation")
 	}
 
-	opm := c.newKvOpManager("decrement", opts.ParentSpan)
+	opm := newKvOpManager(c, "decrement", opts.ParentSpan)
 	defer opm.Finish(false)
 
 	opm.SetDocumentID(id)
@@ -322,11 +240,14 @@ func (c *Collection) binaryDecrement(id string, opts *DecrementOptions) (countOu
 	opm.SetTimeout(opts.Timeout)
 	opm.SetImpersonate(opts.Internal.User)
 	opm.SetContext(opts.Context)
-
+	opm.SetDelta(opts.Delta)
+	opm.SetExpiry(opts.Expiry)
 	realInitial := uint64(0xFFFFFFFFFFFFFFFF)
 	if opts.Initial >= 0 {
 		realInitial = uint64(opts.Initial)
 	}
+
+	opm.SetInitial(realInitial)
 
 	if err := opm.CheckReadyForOp(); err != nil {
 		return nil, err
@@ -336,37 +257,8 @@ func (c *Collection) binaryDecrement(id string, opts *DecrementOptions) (countOu
 	if err != nil {
 		return nil, err
 	}
-	err = opm.Wait(agent.Decrement(gocbcore.CounterOptions{
-		Key:                    opm.DocumentID(),
-		Delta:                  opts.Delta,
-		Initial:                realInitial,
-		Expiry:                 durationToExpiry(opts.Expiry),
-		CollectionName:         opm.CollectionName(),
-		ScopeName:              opm.ScopeName(),
-		DurabilityLevel:        opm.DurabilityLevel(),
-		DurabilityLevelTimeout: opm.DurabilityTimeout(),
-		RetryStrategy:          opm.RetryStrategy(),
-		TraceContext:           opm.TraceSpanContext(),
-		Deadline:               opm.Deadline(),
-		User:                   opm.Impersonate(),
-	}, func(res *gocbcore.CounterResult, err error) {
-		if err != nil {
-			errOut = opm.EnhanceErr(err)
-			opm.Reject()
-			return
-		}
 
-		countOut = &CounterResult{}
-		countOut.cas = Cas(res.Cas)
-		countOut.mt = opm.EnhanceMt(res.MutationToken)
-		countOut.content = res.Value
-
-		opm.Resolve(countOut.mt)
-	}))
-	if err != nil {
-		errOut = err
-	}
-	return
+	return agent.Decrement(opm)
 }
 
 // Decrement performs an atomic subtraction for an integer document. Passing a

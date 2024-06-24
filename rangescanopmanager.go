@@ -32,7 +32,7 @@ type rangeScanOpManager struct {
 	dataCh   chan *ScanResultItem
 	streams  map[uint16]*rangeScanStream
 
-	agent       kvProvider
+	agent       *gocbcore.Agent
 	createdTime time.Time
 	meter       *meterWrapper
 	tracer      RequestTracer
@@ -324,7 +324,7 @@ func (m *rangeScanOpManager) Scan() (*ScanResult, error) {
 	return r, nil
 }
 
-func (c *Collection) newRangeScanOpManager(scanType ScanType, numVbuckets int, agent kvProvider,
+func (p *kvProviderCore) newRangeScanOpManager(c *Collection, scanType ScanType, numVbuckets int, agent *gocbcore.Agent,
 	parentSpan RequestSpan, consistentWith *MutationState, keysOnly bool, sort ScanSort) (*rangeScanOpManager, error) {
 	var tracectx RequestSpanContext
 	if parentSpan != nil {
@@ -637,7 +637,7 @@ func (rss *rangeScanStream) create(ctx context.Context, rangeOpts *gocbcore.Rang
 		uuidOut = result.ScanUUUID
 		opMan.Resolve()
 	}))
-	if err != nil {
+	if errOut != nil {
 		errOut = err
 	}
 
@@ -686,7 +686,7 @@ func (rss *rangeScanStream) scanContinue(scanUUID []byte) (itemsOut []gocbcore.R
 		logInfof("Received a range scan action that did not meet what we expected")
 		opm.Resolve()
 	}))
-	if err != nil {
+	if errOut != nil {
 		errOut = err
 	}
 

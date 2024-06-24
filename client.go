@@ -31,9 +31,15 @@ type stdConnectionMgr struct {
 	config     *gocbcore.AgentGroupConfig
 }
 
-func newConnectionMgr() *stdConnectionMgr {
-	client := &stdConnectionMgr{}
-	return client
+// TODO: change how managers are selected.
+func newConnectionMgr(protocol string) connectionManager {
+	switch protocol {
+	// case "protostellar", "protostellars":
+	// 	return &protoStellarConnectionMgr{}
+	default:
+		client := &stdConnectionMgr{}
+		return client
+	}
 }
 
 func (c *stdConnectionMgr) buildConfig(cluster *Cluster) error {
@@ -158,7 +164,7 @@ func (c *stdConnectionMgr) getKvProvider(bucketName string) (kvProvider, error) 
 	if agent == nil {
 		return nil, errors.New("bucket not yet connected")
 	}
-	return agent, nil
+	return &kvProviderCore{agent: agent}, nil
 }
 
 func (c *stdConnectionMgr) getKvCapabilitiesProvider(bucketName string) (kvCapabilityVerifier, error) {

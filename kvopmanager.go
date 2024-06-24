@@ -9,12 +9,21 @@ import (
 	"github.com/couchbase/gocbcore/v10/memd"
 )
 
+// wrapper around kvOpManager to make the async gocbcore operations
+// sync.
+type coreKvOpManager struct {
+	kvOpManager
+	cancelCh    chan struct{}
+	signal      chan struct{}
+	wasResolved bool
+	kv          *kvProviderCore
+}
+
+// Contains information only useful to both gocbcore and protostellar
 type kvOpManager struct {
 	parent *Collection
-	signal chan struct{}
 
 	err           error
-	wasResolved   bool
 	mutationToken *MutationToken
 
 	span            RequestSpan
@@ -28,7 +37,6 @@ type kvOpManager struct {
 	replicateTo     uint
 	durabilityLevel memd.DurabilityLevel
 	retryStrategy   *retryStrategyWrapper
-	cancelCh        chan struct{}
 	impersonate     string
 
 	operationName string
@@ -37,6 +45,67 @@ type kvOpManager struct {
 	preserveTTL   bool
 
 	ctx context.Context
+
+	cas Cas
+
+	lockTime time.Duration
+
+	expiry time.Duration
+
+	replicaIndex int
+
+	adjoinBytes []byte // bytes for prepending/appending
+
+	delta uint64
+
+	initial uint64
+}
+
+func (m *kvOpManager) SetInitial(initial uint64) {
+	m.initial = initial
+}
+
+func (m *kvOpManager) Initial() uint64 {
+	return m.initial
+}
+func (m *kvOpManager) SetDelta(delta uint64) {
+	m.delta = delta
+}
+
+func (m *kvOpManager) Delta() uint64 {
+	return m.delta
+}
+
+func (m *kvOpManager) SetAdjoinBytes(val []byte) {
+	m.adjoinBytes = val
+}
+
+func (m *kvOpManager) AdjoinBytes() []byte {
+	return m.adjoinBytes
+}
+
+func (m *kvOpManager) SetReplicaIndex(index int) {
+	m.replicaIndex = index
+}
+
+func (m *kvOpManager) ReplicaIndex() int {
+	return m.replicaIndex
+}
+
+func (m *kvOpManager) SetExpiry(expiry time.Duration) {
+	m.expiry = expiry
+}
+
+func (m *kvOpManager) Expiry() time.Duration {
+	return m.expiry
+}
+
+func (m *kvOpManager) SetLockTime(lockTime time.Duration) {
+	m.lockTime = lockTime
+}
+
+func (m *kvOpManager) LockTime() time.Duration {
+	return m.lockTime
 }
 
 func (m *kvOpManager) getTimeout() time.Duration {
@@ -63,10 +132,6 @@ func (m *kvOpManager) getTimeout() time.Duration {
 
 func (m *kvOpManager) SetDocumentID(id string) {
 	m.documentID = id
-}
-
-func (m *kvOpManager) SetCancelCh(cancelCh chan struct{}) {
-	m.cancelCh = cancelCh
 }
 
 func (m *kvOpManager) SetTimeout(timeout time.Duration) {
@@ -154,6 +219,14 @@ func (m *kvOpManager) SetContext(ctx context.Context) {
 
 func (m *kvOpManager) SetPreserveExpiry(preserveTTL bool) {
 	m.preserveTTL = preserveTTL
+}
+
+func (m *kvOpManager) SetCas(cas Cas) {
+	m.cas = cas
+}
+
+func (m *kvOpManager) Cas() Cas {
+	return m.cas
 }
 
 func (m *kvOpManager) Finish(noMetrics bool) {
@@ -272,17 +345,17 @@ func (m *kvOpManager) EnhanceMt(token gocbcore.MutationToken) *MutationToken {
 	return nil
 }
 
-func (m *kvOpManager) Reject() {
+func (m *coreKvOpManager) Reject() {
 	m.signal <- struct{}{}
 }
 
-func (m *kvOpManager) Resolve(token *MutationToken) {
+func (m *coreKvOpManager) Resolve(token *MutationToken) {
 	m.wasResolved = true
 	m.mutationToken = token
 	m.signal <- struct{}{}
 }
 
-func (m *kvOpManager) Wait(op gocbcore.PendingOp, err error) error {
+func (m *coreKvOpManager) Wait(op gocbcore.PendingOp, err error) error {
 	if err != nil {
 		return err
 	}
@@ -306,8 +379,9 @@ func (m *kvOpManager) Wait(op gocbcore.PendingOp, err error) error {
 			return errors.New("expected a mutation token")
 		}
 
-		return m.parent.waitForDurability(
+		return m.kv.waitForDurability(
 			m.ctx,
+			m.parent,
 			m.span,
 			m.documentID,
 			m.mutationToken.token,
@@ -322,7 +396,11 @@ func (m *kvOpManager) Wait(op gocbcore.PendingOp, err error) error {
 	return nil
 }
 
-func (c *Collection) newKvOpManager(opName string, parentSpan RequestSpan) *kvOpManager {
+func (m *coreKvOpManager) SetCancelCh(cancelCh chan struct{}) {
+	m.cancelCh = cancelCh
+}
+
+func newKvOpManager(c *Collection, opName string, parentSpan RequestSpan) *kvOpManager {
 	var tracectx RequestSpanContext
 	if parentSpan != nil {
 		tracectx = parentSpan.Context()
@@ -332,11 +410,18 @@ func (c *Collection) newKvOpManager(opName string, parentSpan RequestSpan) *kvOp
 
 	return &kvOpManager{
 		parent:        c,
-		signal:        make(chan struct{}, 1),
 		span:          span,
 		operationName: opName,
 		createdTime:   time.Now(),
 		meter:         c.meter,
+	}
+}
+
+func newCoreKvOpManager(opManager *kvOpManager, kv *kvProviderCore) *coreKvOpManager {
+	return &coreKvOpManager{
+		kvOpManager: *opManager,
+		kv:          kv,
+		signal:      make(chan struct{}, 1),
 	}
 }
 
